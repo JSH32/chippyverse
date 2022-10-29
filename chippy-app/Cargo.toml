@@ -12,3 +12,4 @@ miniquad = "0.3.13"
 # egui_demo_lib = "0.19.0"
 chippy-core = { path = "../chippy-core" }
 rfd = "0.10.0"
+egui-modal = "0.1.6"

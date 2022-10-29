@@ -15,6 +15,37 @@ pub struct MainApp {
     chip8: Arc<ExecutingChip8>,
     screen_texture: Option<Texture>,
     debugger_window: WindowContainer<DebuggerWindow>,
+    settings_open: bool,
+}
+
+#[derive(Clone)]
+struct SettingsWindow {
+    frequency: u32,
+}
+
+impl Default for SettingsWindow {
+    fn default() -> Self {
+        Self { frequency: 600 }
+    }
+}
+
+trait EguiState<T> {
+    fn load_state(ctx: &egui::Context, id: egui::Id) -> Self;
+    fn save_state(self, ctx: &egui::Context, id: egui::Id);
+}
+
+/// Anything that can be cloned can be stored as state.
+impl<T> EguiState<T> for T
+where
+    T: Send + Sync + Clone + Default + 'static,
+{
+    fn load_state(ctx: &egui::Context, id: egui::Id) -> Self {
+        ctx.data().get_persisted(id).unwrap_or_default()
+    }
+
+    fn save_state(self, ctx: &egui::Context, id: egui::Id) {
+        ctx.data().insert_persisted(id, self)
+    }
 }
 
 impl MainApp {
@@ -33,6 +64,7 @@ impl MainApp {
             chip8,
             screen_texture: None,
             debugger_window: WindowContainer::new(DebuggerWindow::new(chip8_clone)),
+            settings_open: false,
         }
     }
 
@@ -74,7 +106,7 @@ impl Window for MainApp {
         }
     }
 
-    fn on_open(&mut self, ctx: &mut mq::Context) {
+    fn on_open(&mut self, ctx: &mut mq::Context, _egui_ctx: &mut egui_mq::EguiMq) {
         self.screen_texture = Some(Texture::from_data_and_format(
             ctx,
             vec![0; 64 * 32 * 4].as_slice(),
@@ -110,8 +142,11 @@ impl Window for MainApp {
                                     .unwrap()
                                     .load_rom(fs::read(path).expect("Unable to read ROM"));
                             }
+                            ui.close_menu();
                         }
+                    });
 
+                    ui.menu_button("System", |ui| {
                         if ui
                             .add_enabled(
                                 !self.debugger_window.is_open(),
@@ -120,6 +155,15 @@ impl Window for MainApp {
                             .clicked()
                         {
                             let _ = self.debugger_window.open();
+                            ui.close_menu();
+                        }
+
+                        if ui
+                            .add_enabled(!self.settings_open, egui::Button::new("Settings"))
+                            .clicked()
+                        {
+                            self.settings_open = true;
+                            ui.close_menu();
                         }
                     });
                 });
@@ -134,6 +178,23 @@ impl Window for MainApp {
                     ),
                 );
             });
+
+            egui::Window::new("Settings")
+                .open(&mut self.settings_open)
+                .show(egui_ctx, |ui| {
+                    let persistent_id = ui.make_persistent_id("frequency_selector_option");
+
+                    let mut settings = SettingsWindow::load_state(egui_ctx, persistent_id);
+
+                    if ui
+                        .add(egui::Slider::new(&mut settings.frequency, 1..=6000).text("Frequency"))
+                        .changed()
+                    {
+                        self.chip8.set_frequency(settings.frequency as i32);
+                    }
+
+                    settings.save_state(egui_ctx, persistent_id);
+                });
         });
 
         // Draw things behind egui here

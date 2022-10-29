@@ -6,7 +6,7 @@ pub mod types;
 use std::{
     ops::Deref,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicI32, Ordering},
         Arc, RwLock,
     },
     thread::{self},
@@ -15,6 +15,77 @@ use std::{
 
 pub use keypad::Keypad;
 use types::C8Byte;
+
+/// Create a shared chip8 executing on its own thread.
+pub struct ExecutingChip8 {
+    chip8: Arc<RwLock<Chip8>>,
+    frequency: Arc<AtomicI32>,
+    running: Arc<AtomicBool>,
+}
+
+impl Deref for ExecutingChip8 {
+    type Target = Arc<RwLock<Chip8>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.chip8
+    }
+}
+
+impl ExecutingChip8 {
+    pub fn new() -> Self {
+        let chip8 = Arc::new(RwLock::new(Chip8::new()));
+        let running = Arc::new(AtomicBool::new(false));
+        let frequency = Arc::new(AtomicI32::new(600));
+
+        let chip8_clone = chip8.clone();
+        let running_clone = running.clone();
+        let frequency_clone = frequency.clone();
+        thread::spawn(move || {
+            loop {
+                // Wait while running is disabled.
+                while !running_clone.load(Ordering::Relaxed) {}
+
+                let init_time = Instant::now();
+
+                chip8_clone.write().unwrap().interpreter();
+
+                let end_time = Instant::now();
+
+                // Wait here til time for more cycles
+                while Instant::now()
+                    < end_time
+                        + Duration::from_nanos(
+                            1000000000 / frequency_clone.load(Ordering::Relaxed) as u64,
+                        )
+                        - (end_time - init_time)
+                {}
+            }
+        });
+
+        Self {
+            chip8,
+            running,
+            frequency,
+        }
+    }
+
+    pub fn set_frequency(&self, frequency: i32) {
+        self.frequency.store(frequency, Ordering::Relaxed);
+    }
+
+    pub fn get_frequency(&self) -> i32 {
+        self.frequency.load(Ordering::Relaxed)
+    }
+
+    /// Should the managed thread be executing.
+    pub fn set_running(&self, start: bool) {
+        self.running.store(start, Ordering::Relaxed)
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running.load(Ordering::Relaxed)
+    }
+}
 
 /// Chip8 emulator with both JIT and interpreter.
 /// Members are only public for debugging purposes.
@@ -41,60 +112,6 @@ pub struct Chip8 {
 
     pub keypad: Keypad,
     timer: Instant,
-}
-
-/// Create a shared chip8 executing on its own thread.
-pub struct ExecutingChip8 {
-    chip8: Arc<RwLock<Chip8>>,
-    // join_handle: JoinHandle<Thread>,
-    running: Arc<AtomicBool>,
-}
-
-impl Deref for ExecutingChip8 {
-    type Target = Arc<RwLock<Chip8>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.chip8
-    }
-}
-
-impl ExecutingChip8 {
-    pub fn new() -> Self {
-        let chip8 = Arc::new(RwLock::new(Chip8::new()));
-        let running = Arc::new(AtomicBool::new(false));
-
-        let chip8_clone = chip8.clone();
-        let running_clone = running.clone();
-        thread::spawn(move || {
-            loop {
-                // Wait while running is disabled.
-                while !running_clone.load(Ordering::Relaxed) {}
-
-                let init_time = Instant::now();
-
-                chip8_clone.write().unwrap().interpreter();
-
-                let end_time = Instant::now();
-
-                // Wait here til time for more cycles
-                while Instant::now()
-                    < end_time + Duration::from_nanos(1000000000 / 600) - (end_time - init_time)
-                {
-                }
-            }
-        });
-
-        Self { chip8, running }
-    }
-
-    /// Should the managed thread be executing.
-    pub fn set_running(&self, start: bool) {
-        self.running.store(start, Ordering::Relaxed)
-    }
-
-    pub fn is_running(&self) -> bool {
-        self.running.load(Ordering::Relaxed)
-    }
 }
 
 impl Chip8 {

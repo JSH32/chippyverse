@@ -116,24 +116,27 @@ impl Window for DebuggerWindow {
                     }
                     DebuggerTab::Dissasembly => {
                         egui::Grid::new("debug_dissasembly")
-                            .num_columns(3)
+                            .num_columns(4)
                             .striped(true)
                             .show(ui, |ui| {
                                 ui.heading("Location");
                                 ui.heading("Value");
                                 ui.heading("Opcode");
+                                ui.heading("Description");
                                 ui.end_row();
-
-                                let opcode = OpCode::from_opcode(extract_opcode_from_array(
-                                    &chip8.memory,
-                                    chip8.pc as usize,
-                                ));
 
                                 let opcode_row = |ui: &mut Ui, idx| {
                                     let value = chip8.memory[idx as usize];
+
+                                    let opcode_str = OpCode::from_opcode(
+                                        extract_opcode_from_array(&chip8.memory, idx as usize),
+                                    )
+                                    .get_opcode_str();
+
                                     ui.monospace(format!("{:X}", idx));
                                     ui.monospace(format!("{:X}", value));
-                                    ui.monospace(format!("{}", opcode.get_opcode_str().0));
+                                    ui.monospace(format!("{}", opcode_str.0));
+                                    ui.monospace(format!("{}", opcode_str.1));
                                     ui.end_row();
                                 };
 

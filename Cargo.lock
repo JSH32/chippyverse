@@ -136,6 +136,7 @@ dependencies = [
  "chippy-core",
  "egui",
  "egui-miniquad",
+ "egui-modal",
  "miniquad",
  "rfd",
 ]
@@ -251,6 +252,15 @@ dependencies = [
  "miniquad",
  "quad-rand",
  "quad-url",
+]
+
+[[package]]
+name = "egui-modal"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "790408d758f2c2c1dd7b7dd91c3c05cbb3065eda3f6f52cc4f9040bd419e49e3"
+dependencies = [
+ "egui",
 ]
 
 [[package]]

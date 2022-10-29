@@ -21,12 +21,33 @@ struct InternalWindow<T: Window> {
 
 impl<T: Window> InternalWindow<T> {
     fn new(ctx: &mut mq::Context, running: Arc<AtomicBool>, window: Arc<RwLock<T>>) -> Self {
-        window.write().on_open(ctx);
+        let mut egui_ctx = egui_mq::EguiMq::new(ctx);
+
+        window.write().on_open(ctx, &mut egui_ctx);
+
+        let mut visuals = egui::Visuals::dark();
+        let rounding = egui::Rounding::same(2.0);
+
+        visuals.widgets.noninteractive.rounding = rounding;
+        visuals.widgets.inactive.rounding = rounding;
+        visuals.widgets.hovered.rounding = rounding;
+        visuals.widgets.active.rounding = rounding;
+        visuals.widgets.open.rounding = rounding;
+        visuals.window_rounding = rounding;
+
+        let expansion = 0.0;
+        visuals.widgets.noninteractive.expansion = expansion;
+        visuals.widgets.inactive.expansion = expansion;
+        visuals.widgets.hovered.expansion = expansion;
+        visuals.widgets.active.expansion = expansion;
+        visuals.widgets.open.expansion = expansion;
+
+        egui_ctx.egui_ctx().set_visuals(visuals);
 
         Self {
             window,
             running,
-            egui_ctx: egui_mq::EguiMq::new(ctx),
+            egui_ctx,
         }
     }
 }
@@ -191,7 +212,7 @@ pub trait Window: Send + Sync {
 
     /// Called when the window is opened.
     /// A new graphics context is initialized so you should initialize/re-initialize your resources here.
-    fn on_open(&mut self, _ctx: &mut mq::Context) {}
+    fn on_open(&mut self, _ctx: &mut mq::Context, _egui_ctx: &mut egui_mq::EguiMq) {}
 
     fn update(&mut self, ctx: &mut mq::Context);
     fn draw(&mut self, ctx: &mut mq::Context, egui_ctx: &mut egui_mq::EguiMq);
