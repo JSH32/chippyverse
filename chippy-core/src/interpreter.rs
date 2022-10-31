@@ -188,7 +188,6 @@ impl Chip8 {
                 self.index = self.registers[reg as usize] as u16 * 5;
             }
             OpCode::LDBCD(reg) => {
-                // let x = opcode.x();
                 let reg = self.registers[reg as usize];
 
                 self.memory[self.index as usize] = reg / 100;

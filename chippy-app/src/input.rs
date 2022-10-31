@@ -1,15 +1,6 @@
 use chippy_core::Keypad;
 use miniquad::KeyCode;
 
-// #[derive(Default)]
-// pub struct Input {
-//     keys: [bool; 16],
-//     last_pressed: u8,
-// }
-
-// unsafe impl Send for Input {}
-// unsafe impl Sync for Input {}
-
 pub(crate) trait InputHandler {
     /// Returns whether the key event was caught or not.
     fn key_event(&mut self, event: KeyEvent, keycode: KeyCode) -> bool;
