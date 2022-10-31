@@ -4,7 +4,7 @@ use chippy_core::{
     opcode::{extract_opcode_from_array, OpCode},
     ExecutingChip8,
 };
-use egui::{Align, Color32, Ui};
+use egui::{Align, Color32, RichText, Ui};
 
 use crate::window::{self, Window};
 
@@ -35,7 +35,7 @@ impl Window for DebuggerWindow {
         ctx.begin_default_pass(mq::PassAction::clear_color(0.0, 0.0, 0.0, 1.0));
         ctx.end_render_pass();
 
-        egui_ctx.run(ctx, |_mq_ctx, egui_ctx| {
+        egui_ctx.run(ctx, |mq_ctx, egui_ctx| {
             egui::TopBottomPanel::top("debug_top").show(&egui_ctx, |ui| {
                 ui.horizontal(|ui| {
                     if ui
@@ -46,6 +46,7 @@ impl Window for DebuggerWindow {
                         .clicked()
                     {
                         self.selected = DebuggerTab::Registers;
+                        mq_ctx.set_window_size(230, 500)
                     }
 
                     ui.separator();
@@ -58,11 +59,19 @@ impl Window for DebuggerWindow {
                         .clicked()
                     {
                         self.selected = DebuggerTab::Dissasembly;
+                        mq_ctx.set_window_size(850, 540)
                     }
 
                     ui.separator();
 
                     ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                        if ui
+                            .add_enabled(!self.chip8.is_running(), egui::Button::new("⮫"))
+                            .clicked()
+                        {
+                            self.chip8.write().unwrap().interpreter()
+                        }
+
                         if ui
                             .button(if self.chip8.is_running() {
                                 "⏸"
@@ -80,74 +89,88 @@ impl Window for DebuggerWindow {
             egui::CentralPanel::default().show(&egui_ctx, |ui| {
                 let chip8 = self.chip8.read().unwrap();
 
-                match self.selected {
-                    DebuggerTab::Registers => {
-                        egui::Grid::new("debug_registers")
-                            .num_columns(2)
-                            .min_col_width(ui.available_width() / 2.0)
-                            .striped(true)
-                            .show(ui, |ui| {
-                                ui.heading("PC");
-                                ui.monospace(format!("{:X}", chip8.pc));
-                                ui.end_row();
-
-                                ui.heading("SP");
-                                ui.monospace(format!("{:X}", chip8.sp));
-                                ui.end_row();
-
-                                ui.heading("I");
-                                ui.monospace(format!("{:X}", chip8.index));
-                                ui.end_row();
-
-                                for v in 0..15 {
-                                    ui.heading(format!("V{}", v));
-                                    ui.monospace(format!("{:X}", chip8.registers[v]));
+                egui::ScrollArea::vertical()
+                    .hscroll(true)
+                    .show(ui, |ui| match self.selected {
+                        DebuggerTab::Registers => {
+                            egui::Grid::new("debug_registers")
+                                .num_columns(2)
+                                .min_col_width(100.0)
+                                .striped(true)
+                                .show(ui, |ui| {
+                                    ui.heading("PC");
+                                    ui.monospace(format!("{:X}", chip8.pc));
                                     ui.end_row();
-                                }
 
-                                ui.heading("DT");
-                                ui.monospace(format!("{:X}", chip8.delay_timer));
-                                ui.end_row();
-
-                                ui.heading("ST");
-                                ui.monospace(format!("{:X}", chip8.sound_timer));
-                                ui.end_row();
-                            });
-                    }
-                    DebuggerTab::Dissasembly => {
-                        egui::Grid::new("debug_dissasembly")
-                            .num_columns(4)
-                            .striped(true)
-                            .show(ui, |ui| {
-                                ui.heading("Location");
-                                ui.heading("Value");
-                                ui.heading("Opcode");
-                                ui.heading("Description");
-                                ui.end_row();
-
-                                let opcode_row = |ui: &mut Ui, idx| {
-                                    let value = chip8.memory[idx as usize];
-
-                                    let opcode_str = OpCode::from_opcode(
-                                        extract_opcode_from_array(&chip8.memory, idx as usize),
-                                    )
-                                    .get_opcode_str();
-
-                                    ui.monospace(format!("{:X}", idx));
-                                    ui.monospace(format!("{:X}", value));
-                                    ui.monospace(format!("{}", opcode_str.0));
-                                    ui.monospace(format!("{}", opcode_str.1));
+                                    ui.heading("SP");
+                                    ui.monospace(format!("{:X}", chip8.sp));
                                     ui.end_row();
-                                };
 
-                                for i in chip8.pc - 15..chip8.pc {
-                                    opcode_row(ui, i);
-                                }
+                                    ui.heading("I");
+                                    ui.monospace(format!("{:X}", chip8.index));
+                                    ui.end_row();
 
-                                opcode_row(ui, chip8.pc);
-                            });
-                    }
-                };
+                                    for v in 0..15 {
+                                        ui.heading(format!("V{}", v));
+                                        ui.monospace(format!("{:X}", chip8.registers[v]));
+                                        ui.end_row();
+                                    }
+
+                                    ui.heading("DT");
+                                    ui.monospace(format!("{:X}", chip8.delay_timer));
+                                    ui.end_row();
+
+                                    ui.heading("ST");
+                                    ui.monospace(format!("{:X}", chip8.sound_timer));
+                                    ui.end_row();
+                                });
+                        }
+                        DebuggerTab::Dissasembly => {
+                            egui::Grid::new("debug_dissasembly")
+                                .num_columns(4)
+                                .striped(true)
+                                .min_col_width(120.0)
+                                .show(ui, |ui| {
+                                    ui.heading("Location");
+                                    ui.heading("Value");
+                                    ui.heading("Opcode");
+                                    ui.heading("Description");
+                                    ui.end_row();
+
+                                    let opcode_row = |ui: &mut Ui, idx, current| {
+                                        let value = chip8.memory[idx as usize];
+
+                                        let opcode_str = OpCode::from_opcode(
+                                            extract_opcode_from_array(&chip8.memory, idx as usize),
+                                        )
+                                        .get_opcode_str();
+
+                                        ui.monospace(RichText::new(format!("{:X}", idx)).color(
+                                            if current {
+                                                Color32::LIGHT_RED
+                                            } else {
+                                                Color32::GRAY
+                                            },
+                                        ));
+
+                                        ui.monospace(format!("{:X}", value));
+                                        ui.monospace(format!("{}", opcode_str.0));
+                                        ui.monospace(format!("{}", opcode_str.1));
+                                        ui.end_row();
+                                    };
+
+                                    for i in chip8.pc - 11..chip8.pc {
+                                        opcode_row(ui, i, false);
+                                    }
+
+                                    opcode_row(ui, chip8.pc, true);
+
+                                    for i in chip8.pc..(chip8.pc + 10) {
+                                        opcode_row(ui, i, false);
+                                    }
+                                });
+                        }
+                    });
             });
         });
 
